@@ -601,6 +601,9 @@ type SessionView struct {
 	// Model is the agent model this session resolved to at spawn time. Empty
 	// means the agent's default model. Pulled from the json:"-" domain Metadata.
 	Model string `json:"model,omitempty"`
+	// ModelPending distinguishes Memcode endpoint discovery during a TUI spawn
+	// from a completed launch that selected the provider default model.
+	ModelPending bool `json:"modelPending,omitempty"`
 	// Effort is the reasoning level resolved for this session at spawn time.
 	// Empty means the provider default.
 	Effort string `json:"effort,omitempty"`
