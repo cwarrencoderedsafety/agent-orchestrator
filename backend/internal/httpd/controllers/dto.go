@@ -601,6 +601,9 @@ type SessionView struct {
 	// Model is the agent model this session resolved to at spawn time. Empty
 	// means the agent's default model. Pulled from the json:"-" domain Metadata.
 	Model string `json:"model,omitempty"`
+	// Effort is the reasoning level resolved for this session at spawn time.
+	// Empty means the provider default.
+	Effort string `json:"effort,omitempty"`
 	// LastUserMessageAt is the latest real user-authored task direction time.
 	// Lifecycle and internal automation updates do not advance it.
 	LastUserMessageAt *time.Time `json:"lastUserMessageAt,omitempty"`
