@@ -3276,6 +3276,9 @@ func TestSpawnMemcodeCustomEndpointClearsOnlyInheritedModels(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if len(st.createdRows) != 1 || st.createdRows[0].Metadata.Model != "" {
+					t.Fatalf("Memcode initial row must wait for endpoint discovery: %+v", st.createdRows)
+				}
 				want := ""
 				if source == "no endpoint" {
 					want = "opus"

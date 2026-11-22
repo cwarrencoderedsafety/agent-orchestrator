@@ -1306,6 +1306,11 @@ func (m *Manager) Spawn(ctx context.Context, cfg ports.SpawnConfig) (result doma
 		resolvedSelection = cfg.AgentConfig
 	} else {
 		resolvedSelection.Model = resolvedModelForMetadata(cfg.Harness, agentConfig, adapterConfig)
+		// Memcode may discover a workspace-native endpoint only after this row
+		// is created. Until then its model is not resolved for the launch.
+		if cfg.Harness == domain.HarnessMemcode {
+			resolvedSelection.Model = ""
+		}
 	}
 
 	var prep *taskPreparation
