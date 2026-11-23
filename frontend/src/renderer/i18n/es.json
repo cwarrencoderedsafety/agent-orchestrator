@@ -5531,5 +5531,6 @@
 	"artifactComments.sending": "Enviando…",
 	"artifactComments.replies_one": "{{count}} respuesta",
 	"artifactComments.replies_many": "{{count}} respuestas",
-	"artifactComments.replies_other": "{{count}} respuestas"
+	"artifactComments.replies_other": "{{count}} respuestas",
+	"artifactComments.orchestratorUser": "Usuario de Orchestrator"
 }
