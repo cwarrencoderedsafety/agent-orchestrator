@@ -40,8 +40,10 @@ describe("desktop release workflows", () => {
   const artifactBuilder = path.join(workflowsDirectory, "build-artifacts.yml");
 
   async function readWorkflows() {
+    // mg-*.yml are this fork's own release workflows: they publish the fork's
+    // Windows releases on purpose, so the upstream release guards skip them.
     const names = (await readdir(workflowsDirectory)).filter((name) =>
-      /\.ya?ml$/.test(name),
+      /\.ya?ml$/.test(name) && !name.startsWith("mg-"),
     );
     return Promise.all(
       names.map(async (name) => ({

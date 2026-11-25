@@ -1,0 +1,161 @@
+# .github/workflows/mg-upstream-sync.yml
+name: MG upstream sync
+
+# Weekly: merge upstream's latest stable release tag into matt/stable. A clean
+# merge that passes the checks is pushed, tagged mg-vX.Y.(Z*100+1) and built by
+# mg-windows-release.yml. A conflict or a failed check opens an issue instead.
+#
+# Pushing a merge that changes .github/workflows needs a token with the
+# "workflow" scope; GITHUB_TOKEN never has it. Add a repository secret
+# SYNC_TOKEN (fine-grained PAT on this repo: Contents, Workflows, Actions,
+# Issues read/write) to let those merges through. Without it the push of such
+# a merge fails and an issue says so.
+
+on:
+  schedule:
+    - cron: "23 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: "Upstream tag to merge (default: upstream's latest stable release)"
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: mg-upstream-sync
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: OrchestratorInc/agent-orchestrator
+  BRANCH: matt/stable
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+
+      - name: Find upstream stable tag
+        id: upstream
+        env:
+          REQUESTED: ${{ inputs.upstream_tag }}
+        run: |
+          set -euo pipefail
+          tag="${REQUESTED:-$(gh api "repos/$UPSTREAM/releases/latest" -q .tag_name)}"
+          if [[ ! "$tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Upstream tag '$tag' is not a stable vX.Y.Z tag." >&2
+            exit 1
+          fi
+          git fetch --no-tags "https://github.com/$UPSTREAM.git" "refs/tags/$tag:refs/tags/$tag"
+          git fetch --tags origin
+          base="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+          patch=$(( BASH_REMATCH[3] * 100 + 1 ))
+          version="$base.$patch"
+          while git rev-parse -q --verify "refs/tags/mg-v$version" >/dev/null; do
+            patch=$((patch + 1)); version="$base.$patch"
+          done
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "refs/tags/$tag" HEAD; then
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+            echo "$BRANCH already contains upstream $tag; nothing to do." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream tag
+        id: merge
+        if: steps.upstream.outputs.merged == 'false'
+        env:
+          TAG: ${{ steps.upstream.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git merge --no-edit -m "Merge upstream $TAG into $BRANCH" "refs/tags/$TAG"; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            { echo 'conflicts<<EOF'; git diff --name-only --diff-filter=U; echo EOF; } >> "$GITHUB_OUTPUT"
+            git merge --abort
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.merge.outputs.ok == 'true'
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            packages/product-ui/package-lock.json
+
+      - name: Check the merge
+        id: checks
+        if: steps.merge.outputs.ok == 'true'
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm ci --no-audit --no-fund --prefix ../packages/product-ui
+          npm run typecheck
+          npx vitest run --config vite.renderer.config.ts \
+            src/renderer/components/SessionsBoard src/renderer/components/Sidebar \
+            src/renderer/router.test.tsx src/renderer/i18n
+
+      - name: Push, tag and start the Windows build
+        if: steps.merge.outputs.ok == 'true' && steps.checks.outcome == 'success'
+        env:
+          VERSION: ${{ steps.upstream.outputs.version }}
+          TAG: ${{ steps.upstream.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git tag -a "mg-v$VERSION" -m "Orchestrator $VERSION (upstream $TAG)"
+          git push origin "HEAD:refs/heads/$BRANCH"
+          git push origin "refs/tags/mg-v$VERSION"
+          # A tag pushed with GITHUB_TOKEN starts no workflow, so dispatch it.
+          gh workflow run mg-windows-release.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" -f tag="mg-v$VERSION"
+          echo "Merged upstream $TAG, tagged mg-v$VERSION, started the Windows build." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep upstream workflows off
+        if: steps.merge.outputs.ok == 'true' && steps.checks.outcome == 'success'
+        run: |
+          set -euo pipefail
+          # A merge can bring new upstream workflows; only the MG ones run here.
+          gh workflow list --repo "$GITHUB_REPOSITORY" --all --json name,path,state \
+            -q '.[] | select(.state == "active") | select(.path | test("/mg-[^/]*\\.yml$") | not) | .path' |
+          while read -r path; do
+            [ -n "$path" ] && gh workflow disable "$(basename "$path")" --repo "$GITHUB_REPOSITORY" || true
+          done
+
+      - name: Open an issue when the sync needs a human
+        if: failure() || steps.merge.outputs.ok == 'false'
+        env:
+          TAG: ${{ steps.upstream.outputs.tag }}
+          CONFLICTS: ${{ steps.merge.outputs.conflicts }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Upstream sync needs attention: ${TAG:-unknown tag}"
+          if [ -n "$CONFLICTS" ]; then
+            body="Merging upstream \`$TAG\` into \`$BRANCH\` conflicts in:"$'\n\n'"$(printf -- '- `%s`\n' $CONFLICTS)"$'\n\n'"Merge it by hand, push \`$BRANCH\`, then push a tag \`mg-v<version>\`. Run: $RUN_URL"
+          else
+            body="The weekly sync of upstream \`${TAG:-?}\` into \`$BRANCH\` failed (checks, push or dispatch). Nothing was pushed unless the run log says so. Run: $RUN_URL"
+          fi
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number -q '.[0].number')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

@@ -1,0 +1,125 @@
+# .github/workflows/mg-windows-release.yml
+name: MG Windows release
+
+# Fork-only release: builds the unsigned Windows x64 NSIS installer and the
+# electron-updater feed (latest.yml + .blockmap) for this fork, then publishes
+# them as a GitHub Release here. AO_RELEASE_REPO bakes this repository into
+# app-update.yml, so installed copies keep updating from this fork.
+#
+# Versions: upstream X.Y.Z becomes X.Y.(Z*100+n), n = 1, 2, ... for each fork
+# build on that upstream base (0.15.6 -> 0.15.601, 0.15.602; 0.15.7 -> 0.15.701).
+# Tag mg-v<version> to release, e.g. mg-v0.15.601.
+#
+# Left out on purpose: code signing, notarization, Sentry (AO_PUBLISHED_BUILD
+# is not set, so Sentry error reporting and source-map upload stay off), the
+# other platforms and the private ao-cloud submodule.
+
+on:
+  push:
+    tags: ["mg-v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing mg-v<version> tag to build and release"
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mg-windows-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+    steps:
+      - name: Resolve version from tag
+        working-directory: .
+        run: |
+          set -euo pipefail
+          version="${TAG#mg-v}"
+          if [[ "$TAG" != mg-v* || ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Expected a tag like mg-v0.15.601, got '$TAG'." >&2
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            packages/product-ui/package-lock.json
+      # build-daemon.mjs compiles the Go daemon during premake.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - run: npm ci
+      - name: Install product UI dependencies
+        run: npm ci
+        working-directory: packages/product-ui
+      - name: Stamp version
+        run: |
+          node -e "const fs=require('fs'); const p=require('./package.json'); p.version=process.env.VERSION; fs.writeFileSync('./package.json', JSON.stringify(p,null,'\t')+'\n');"
+      - name: Build Windows installer (unsigned)
+        env:
+          AO_RELEASE_REPO: ${{ github.repository }}
+        run: npm run make
+      - name: Verify baked update feed repo
+        run: |
+          set -euo pipefail
+          owner="$(sed -n 's/^owner:[[:space:]]*//p' app-update.yml | tr -d '\r')"
+          repo="$(sed -n 's/^repo:[[:space:]]*//p' app-update.yml | tr -d '\r')"
+          echo "baked feed: $owner/$repo (expected $GITHUB_REPOSITORY)"
+          if [ "$owner/$repo" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::app-update.yml bakes $owner/$repo but this build publishes from $GITHUB_REPOSITORY" >&2
+            exit 1
+          fi
+      - name: Collect installer and write update feed
+        run: |
+          set -euo pipefail
+          mkdir -p dist-release
+          src="$(find out/make -maxdepth 1 -name '*Setup*.exe' | head -n1)"
+          if [ -z "$src" ]; then echo "::error::no NSIS installer in out/make" >&2; ls -la out/make; exit 1; fi
+          name="Agent.Orchestrator.Setup.${VERSION}.exe"
+          cp "$src" "dist-release/$name"
+          # feed.mjs's CLI guard compares file:// URLs, which never match on
+          # Windows paths, so call generateFeeds directly.
+          node --input-type=module -e "
+            import { pathToFileURL } from 'node:url';
+            const { generateFeeds } = await import(pathToFileURL('scripts/feed.mjs').href);
+            await generateFeeds('dist-release', process.env.VERSION, 'latest', new Date().toISOString());
+          "
+          # The unversioned alias the README download links use.
+          cp "dist-release/$name" dist-release/agent-orchestrator-win32-x64.exe
+          ls -la dist-release
+          cat dist-release/latest.yml
+          grep -q "^version: ${VERSION}$" dist-release/latest.yml
+          grep -q "url: ${name}$" dist-release/latest.yml
+          test -f "dist-release/${name}.blockmap"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="Unsigned Windows x64 build of Orchestrator ${VERSION} from ${GITHUB_REPOSITORY} ($(git rev-parse --short HEAD)). Installed copies update from this repository."
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist-release/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" dist-release/* --repo "$GITHUB_REPOSITORY" \
+              --title "Orchestrator ${VERSION}" --notes "$notes" --latest
+          fi
+          echo "Released $TAG: $(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url -q .url)" >> "$GITHUB_STEP_SUMMARY"
