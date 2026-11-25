@@ -37,6 +37,10 @@ jobs:
     timeout-minutes: 120
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
+      # Production AuthKit client (auth.orchestrator.inc), the same public id the
+      # upstream stable releases use. Without it the build falls back to the
+      # staging AuthKit tenant and sign-in fails for real accounts.
+      VITE_WORKOS_CLIENT_ID: ${{ vars.VITE_WORKOS_CLIENT_ID || 'client_01KZ3VRKTDKBZ3JA8AMKTF6W2X' }}
     defaults:
       run:
         shell: bash
@@ -74,6 +78,10 @@ jobs:
       - name: Stamp version
         run: |
           node -e "const fs=require('fs'); const p=require('./package.json'); p.version=process.env.VERSION; fs.writeFileSync('./package.json', JSON.stringify(p,null,'\t')+'\n');"
+      - name: Verify production sign-in client
+        run: |
+          grep -q "PRODUCTION_WORKOS_CLIENT_ID = \"$VITE_WORKOS_CLIENT_ID\"" src/main/cloud-auth.ts || {
+            echo "::error::VITE_WORKOS_CLIENT_ID ($VITE_WORKOS_CLIENT_ID) is not the production AuthKit client in cloud-auth.ts" >&2; exit 1; }
       - name: Build Windows installer (unsigned)
         env:
           AO_RELEASE_REPO: ${{ github.repository }}
