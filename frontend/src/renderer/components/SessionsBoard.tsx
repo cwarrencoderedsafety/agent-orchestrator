@@ -35,7 +35,7 @@ import { useBackgroundTaskReadings } from "../hooks/useBackgroundTasks";
 import { BackgroundTasksBadge } from "./BackgroundTasks";
 import { useCloudCp } from "../hooks/useCloudCp";
 import { useSessionParticipants } from "../hooks/useSessionParticipants";
-import { useCloudProjectsQuery, useRemoteProjectQuery, useWorkspaceQuery, workspaceQueryKeyForHost } from "../hooks/useWorkspaceQuery";
+import { useCloudProjectsQuery, useRemoteProjectQuery, useRemoteWorkspaces, useWorkspaceQuery, workspaceQueryKeyForHost } from "../hooks/useWorkspaceQuery";
 import { useCloudOffering } from "../hooks/useCloudOffering";
 import { FREESTYLE_PROVIDER, projectSandboxProvider, SHARE_FEATURE } from "../lib/cloud-offering";
 import { useTeamsEnabled } from "../hooks/useTeamsEnabled";
@@ -95,7 +95,13 @@ export function SessionsBoard({ projectId, hostId }: SessionsBoardProps) {
 	const columns: KanbanColumnView[] = boardKanbanColumnOrder.map((column) => getKanbanColumnView(column, t));
 	const localWorkspaceQuery = useWorkspaceQuery();
 	const remoteProjectQuery = useRemoteProjectQuery(hostId ?? "", projectId ?? "");
-	const all = localWorkspaceQuery.data ?? [];
+	// The all-projects board also shows every connected remote host's projects
+	// (for example a self-hosted daemon on a VM), not only this machine's.
+	const allProjectsMode = !projectId && !hostId;
+	const remoteWorkspaces = useRemoteWorkspaces({ subscribed: allProjectsMode });
+	const all = allProjectsMode
+		? [...(localWorkspaceQuery.data ?? []), ...remoteWorkspaces.data]
+		: localWorkspaceQuery.data ?? [];
 	const workspaces = hostId
 		? remoteProjectQuery.data ? [remoteProjectQuery.data] : []
 		: projectId ? all.filter((candidate) => candidate.id === projectId) : all;
@@ -114,10 +120,16 @@ export function SessionsBoard({ projectId, hostId }: SessionsBoardProps) {
 		projectSandboxProvider(cloudProject.config, offering) === FREESTYLE_PROVIDER;
 	// Board chrome stays route-oriented; project context remains in the sidebar.
 	// With no project this is the all-projects board, so each card names its project.
-	const allProjects = !projectId && !hostId;
+	const allProjects = allProjectsMode;
 	const boardLabel = allProjects ? t("shell.allProjects") : t("shell.board");
 	const projectNameOf = (session: WorkspaceSession): string | undefined =>
-		allProjects ? workspaces.find((candidate) => candidate.id === session.workspaceId)?.name : undefined;
+		allProjects ? (() => {
+			const owner = workspaces.find((candidate) => candidate.id === session.workspaceId && (candidate.hostId ?? undefined) === (session.hostId ?? undefined));
+			if (!owner) return undefined;
+			if (!session.hostId) return owner.name;
+			const host = labelForHost(session.hostId) ?? shell?.remoteHosts?.find((candidate) => candidate.hostId === session.hostId)?.label ?? session.hostId;
+			return `${owner.name} · ${host}`;
+		})() : undefined;
 	const liveSessions = workspaces.flatMap((workspace) => workerSessions(workspace.sessions)).filter((session) => !session.needsResume || isArchivedSession(session));
 	const demoWorkspaceId = projectId ?? workspaces[0]?.id;
 	const sessions = !hostId && usesPreviewWorkspaceData && demoWorkspaceId && liveSessions.length === 0
@@ -279,21 +291,23 @@ export function SessionsBoard({ projectId, hostId }: SessionsBoardProps) {
 	const terminateSession = useTerminateSession();
 	const activeScopeRef = useRef(scopeKey);
 	activeScopeRef.current = scopeKey;
+	// On the all-projects board a card may belong to a remote host.
+	const hostOf = useCallback((session: WorkspaceSession) => session.hostId ?? hostId, [hostId]);
 	const openSession = useCallback((session: WorkspaceSession) => {
-		if (session.kind === "worker") recordManualWorkerOpen(session.id, hostId);
-		void navigate(sessionNavigateTarget(session.workspaceId, session.id, hostId));
-	}, [navigate, hostId]);
+		if (session.kind === "worker") recordManualWorkerOpen(session.id, hostOf(session));
+		void navigate(sessionNavigateTarget(session.workspaceId, session.id, hostOf(session)));
+	}, [navigate, hostOf]);
 	const openSessionArtifact = useCallback((session: WorkspaceSession, path: string) => {
-		useUiStore.getState().requestWorkspaceFileOpen(session.id, path, hostId, "artifact");
+		useUiStore.getState().requestWorkspaceFileOpen(session.id, path, hostOf(session), "artifact");
 		openSession(session);
-	}, [openSession, hostId]);
+	}, [openSession, hostOf]);
 	const openSessionArtifacts = useCallback((session: WorkspaceSession) => {
-		const uiKey = sessionUiKey(session.id, hostId);
+		const uiKey = sessionUiKey(session.id, hostOf(session));
 		useUiStore.getState().initializeInspectorSession(uiKey, Boolean(session.previewUrl), true);
 		useUiStore.getState().setInspectorView(uiKey, "artifacts");
 		useUiStore.getState().setInspectorOpen(uiKey, true);
 		openSession(session);
-	}, [openSession, hostId]);
+	}, [openSession, hostOf]);
 
 	const restartOrchestrator = async () => {
 		if (!projectId || isProjectRestarting || isProvisioning) return;
@@ -432,7 +446,7 @@ export function SessionsBoard({ projectId, hostId }: SessionsBoardProps) {
 						labels={boardLabels}
 						renderSessionCard={(session) => (
 							<BoardSessionCardAdapter
-								backgroundTasks={!hostId && !localCloudBoard ? <BackgroundTasksBadge session={session} reading={backgroundTasks.data?.get(session.id)} stale={backgroundTasks.isError} /> : undefined}
+								backgroundTasks={!hostId && !session.hostId && !localCloudBoard ? <BackgroundTasksBadge session={session} reading={backgroundTasks.data?.get(session.id)} stale={backgroundTasks.isError} /> : undefined}
 								projectName={projectNameOf(session)}
 								participants={participantsBySession.get(session.id)}
 								me={cloudUserId}

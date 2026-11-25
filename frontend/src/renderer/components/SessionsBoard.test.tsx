@@ -26,6 +26,7 @@ const {
 	postMock,
 	patchMock,
 	workspaceQueryMock,
+	remoteWorkspacesMock,
 	cloudProjectsMock,
 	spawnCloudOrchestratorMock,
 	offeringMock,
@@ -53,6 +54,7 @@ const {
 		postMock: vi.fn(),
 		patchMock: vi.fn(),
 		workspaceQueryMock: vi.fn(),
+		remoteWorkspacesMock: vi.fn((): { data: unknown[] } => ({ data: [] })),
 		cloudProjectsMock: vi.fn((): { id: string; config?: object }[] | undefined => undefined),
 		spawnCloudOrchestratorMock: vi.fn(),
 		offeringMock: vi.fn((): Record<string, unknown> => ({ defaultProvider: "coder" })),
@@ -88,6 +90,7 @@ vi.mock("../hooks/useWorkspaceQuery", () => ({
 	cloudSessionsQueryKey: ["cloud-sessions"],
 	useWorkspaceQuery: workspaceQueryMock,
 	useRemoteProjectQuery: () => ({ data: undefined, isError: false, isSuccess: false }),
+	useRemoteWorkspaces: () => remoteWorkspacesMock(),
 	useRemoteHostWorkspacesQuery: () => ({ data: undefined, isError: false, isSuccess: false }),
 	useCloudProjectsQuery: () => ({ data: cloudProjectsMock() }),
 	useWorkspaceScope: (projectId?: string) => {
@@ -206,6 +209,7 @@ beforeEach(() => {
 	postMock.mockReset().mockResolvedValue({ data: {} });
 	patchMock.mockReset().mockResolvedValue({ data: {}, response: { status: 200 } });
 	workspaceQueryMock.mockReset().mockReturnValue({ data: [], isError: false });
+	remoteWorkspacesMock.mockReset().mockReturnValue({ data: [] });
 	appMemoryMock.mockReset().mockReturnValue({ data: undefined, isError: false });
 	sessionMemoryMock.mockReset().mockReturnValue({ data: undefined, isError: false });
 	offeringMock.mockReset().mockReturnValue({ defaultProvider: "coder" });
@@ -629,6 +633,55 @@ describe("SessionsBoard", () => {
 
 		expect(screen.getByTestId("board-topbar-label")).toHaveTextContent("All projects");
 		expect(screen.queryByRole("button", { name: /^Orchestrator/ })).toBeNull();
+	});
+
+	it("shows remote hosts' projects on the all-projects board and opens them on their host", async () => {
+		const session = (id: string, workspaceId: string, title: string, hostId?: string) => ({
+			id,
+			workspaceId,
+			title,
+			...(hostId ? { hostId } : {}),
+			provider: "claude-code",
+			branch: `ao/${id}`,
+			status: "idle",
+			activity: { state: "idle", lastActivityAt: "2026-01-01T00:00:00Z" },
+			updatedAt: "2026-01-01T00:00:00Z",
+			prs: [],
+		});
+		workspaceQueryMock.mockReturnValue({
+			data: [{ id: "p1", name: "radic", path: "/tmp/radic", sessions: [session("s1", "p1", "local-task")] }],
+			isError: false,
+			isSuccess: true,
+		});
+		remoteWorkspacesMock.mockReturnValue({
+			data: [{ hostId: "atlas", id: "p9", name: "eshop", path: "/AO/projects/eshop", sessions: [session("r1", "p9", "remote-task", "atlas")] }],
+		});
+
+		renderBoard();
+
+		const remote = screen.getByText("remote-task").closest('[data-testid="board-session-card"]') as HTMLElement;
+		expect(within(remote).getByTestId("board-card-project")).toHaveTextContent("eshop");
+		expect(screen.getByText("local-task")).toBeTruthy();
+		await userEvent.click(within(remote).getByText("remote-task"));
+		expect(navigateMock).toHaveBeenCalledWith({
+			to: "/host/$hostId/project/$projectId/session/$sessionId",
+			params: { hostId: "atlas", projectId: "p9", sessionId: "r1" },
+		});
+	});
+
+	it("leaves remote hosts' projects off a single project's board", () => {
+		workspaceQueryMock.mockReturnValue({
+			data: [{ id: "p1", name: "radic", path: "/tmp/radic", sessions: [] }],
+			isError: false,
+			isSuccess: true,
+		});
+		remoteWorkspacesMock.mockReturnValue({
+			data: [{ hostId: "atlas", id: "p9", name: "eshop", path: "/AO/projects/eshop", sessions: [{ id: "r1", workspaceId: "p9", hostId: "atlas", title: "remote-task", provider: "claude-code", branch: "ao/r1", status: "idle", activity: { state: "idle", lastActivityAt: "2026-01-01T00:00:00Z" }, updatedAt: "2026-01-01T00:00:00Z", prs: [] }] }],
+		});
+
+		renderBoard("p1");
+
+		expect(screen.queryByText("remote-task")).toBeNull();
 	});
 
 	it("names each card's project on the all-projects board only", () => {
