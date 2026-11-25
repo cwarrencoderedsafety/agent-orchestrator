@@ -2524,6 +2524,7 @@
 	"archiveModal.empty": "Arşivlenmiş oturum yok",
 	"archiveModal.restore": "Geri yükleyin",
 	"shell.board": "Pano",
+	"shell.allProjects": "Tüm projeler",
 	"shell.closeInspector": "Denetçi panelini kapat",
 	"shell.cloudProjectBadge": "Cloud",
 	"shell.collapseSidebar": "Kenar çubuğunu daralt",

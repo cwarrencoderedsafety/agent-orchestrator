@@ -2178,6 +2178,7 @@
 	"archiveModal.empty": "Nenhuma sessão arquivada",
 	"archiveModal.restore": "Restaurar",
 	"shell.board": "Quadro",
+	"shell.allProjects": "Todos os projetos",
 	"shell.closeInspector": "Fechar painel do inspetor",
 	"shell.cloudProjectBadge": "Nuvem",
 	"shell.collapseSidebar": "Recolher barra lateral",

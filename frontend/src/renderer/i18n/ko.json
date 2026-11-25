@@ -2144,6 +2144,7 @@
 	"archiveModal.empty": "보관된 세션이 없습니다",
 	"archiveModal.restore": "복원",
 	"shell.board": "보드",
+	"shell.allProjects": "모든 프로젝트",
 	"shell.closeInspector": "인스펙터 패널 닫기",
 	"shell.cloudProjectBadge": "클라우드",
 	"shell.collapseSidebar": "사이드바 접기",

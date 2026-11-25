@@ -537,6 +537,7 @@ function useSelection() {
 		select: (state) => state.location.pathname,
 	});
 	const goHome = useCallback(() => void navigate({ to: "/" }), [navigate]);
+	const goAllProjects = useCallback(() => void navigate({ to: "/board" }), [navigate]);
 	const goAutomations = useCallback(() => void navigate({ to: "/automations" }), [navigate]);
 	const goArtifacts = useCallback(() => void navigate({ to: "/artifacts" }), [navigate]);
 	const goUsage = useCallback(() => void navigate({ to: "/usage" }), [navigate]);
@@ -564,6 +565,7 @@ function useSelection() {
 	);
 	return useMemo(() => ({
 		isHome: pathname === "/",
+		isAllProjects: pathname === "/board",
 		isAutomations: pathname === "/automations",
 		isArtifacts: pathname === "/artifacts",
 		isUsage: pathname === "/usage",
@@ -573,6 +575,7 @@ function useSelection() {
 		activeProjectId: params.hostId ? undefined : params.projectId,
 		activeSessionId: params.hostId ? undefined : params.sessionId,
 		goHome,
+		goAllProjects,
 		goAutomations,
 		goArtifacts,
 		goUsage,
@@ -584,7 +587,7 @@ function useSelection() {
 		goSettings,
 		goProject,
 		goSession,
-	}), [goArtifacts, goAutomations, goUsage, goConnectMobile, goGlobalSettings, goHome, goProject, goSession, goSettings, goStandaloneBoard, params.hostId, params.projectId, params.sessionId, pathname]);
+	}), [goAllProjects, goArtifacts, goAutomations, goUsage, goConnectMobile, goGlobalSettings, goHome, goProject, goSession, goSettings, goStandaloneBoard, params.hostId, params.projectId, params.sessionId, pathname]);
 }
 
 // Rows showing the red alert sit above the rest, but only in the default
@@ -1179,6 +1182,15 @@ export const Sidebar = memo(function Sidebar({
 					</SidebarGroup>
 				) : null}
 				<SidebarMenu className="mb-3 gap-0.5 group-data-[collapsible=icon]:gap-1">
+					<SidebarMenuItem>
+						<SidebarTopNavRow
+							active={selection.isAllProjects}
+							icon={<LayoutGrid aria-hidden="true" />}
+							label={t("shell.allProjects")}
+							onClick={selection.goAllProjects}
+							tooltip={isCollapsed ? t("shell.allProjects") : undefined}
+						/>
+					</SidebarMenuItem>
 					<SidebarMenuItem>
 						<SidebarTopNavRow
 							active={selection.isAutomations}

@@ -2178,6 +2178,7 @@
 	"archiveModal.empty": "Aucune session archivée",
 	"archiveModal.restore": "Restaurer",
 	"shell.board": "Tableau",
+	"shell.allProjects": "Tous les projets",
 	"shell.closeInspector": "Fermer le panneau inspecteur",
 	"shell.cloudProjectBadge": "Cloud",
 	"shell.collapseSidebar": "Réduire la barre latérale",

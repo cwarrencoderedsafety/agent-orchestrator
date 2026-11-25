@@ -113,7 +113,11 @@ export function SessionsBoard({ projectId, hostId }: SessionsBoardProps) {
 	const startsInPlace = localCloudBoard && cloudProject !== undefined &&
 		projectSandboxProvider(cloudProject.config, offering) === FREESTYLE_PROVIDER;
 	// Board chrome stays route-oriented; project context remains in the sidebar.
-	const boardLabel = t("shell.board");
+	// With no project this is the all-projects board, so each card names its project.
+	const allProjects = !projectId && !hostId;
+	const boardLabel = allProjects ? t("shell.allProjects") : t("shell.board");
+	const projectNameOf = (session: WorkspaceSession): string | undefined =>
+		allProjects ? workspaces.find((candidate) => candidate.id === session.workspaceId)?.name : undefined;
 	const liveSessions = workspaces.flatMap((workspace) => workerSessions(workspace.sessions)).filter((session) => !session.needsResume || isArchivedSession(session));
 	const demoWorkspaceId = projectId ?? workspaces[0]?.id;
 	const sessions = !hostId && usesPreviewWorkspaceData && demoWorkspaceId && liveSessions.length === 0
@@ -429,6 +433,7 @@ export function SessionsBoard({ projectId, hostId }: SessionsBoardProps) {
 						renderSessionCard={(session) => (
 							<BoardSessionCardAdapter
 								backgroundTasks={!hostId && !localCloudBoard ? <BackgroundTasksBadge session={session} reading={backgroundTasks.data?.get(session.id)} stale={backgroundTasks.isError} /> : undefined}
+								projectName={projectNameOf(session)}
 								participants={participantsBySession.get(session.id)}
 								me={cloudUserId}
 								memory={memoryBySession?.get(session.id)}

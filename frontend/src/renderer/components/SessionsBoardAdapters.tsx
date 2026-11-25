@@ -125,9 +125,12 @@ export function BoardSessionCardAdapter({
 	onOpenArtifacts,
 	onShare,
 	onTerminate,
+	projectName,
 	session,
 }: {
 	backgroundTasks?: ReactNode;
+	/** The card's project, named on the all-projects board only. */
+	projectName?: string;
 	/** Live reading of the session's process tree, for the card's resource chip. */
 	memory?: SessionMemoryReading;
 	/** Colour for the chip; neutral unless this card is part of the fix. */
@@ -147,7 +150,14 @@ export function BoardSessionCardAdapter({
 }) {
 	return (
 		<DesktopSessionCard
-			footer={backgroundTasks}
+			footer={projectName ? (
+				<>
+					<div className="truncate border-t border-border px-3.5 py-1.5 text-2xs text-muted-foreground" data-testid="board-card-project" title={projectName}>
+						{projectName}
+					</div>
+					{backgroundTasks}
+				</>
+			) : backgroundTasks}
 			me={me}
 			participants={participants}
 			memory={memory}

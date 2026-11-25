@@ -2144,6 +2144,7 @@
 	"archiveModal.empty": "Keine archivierten Sitzungen",
 	"archiveModal.restore": "Wiederherstellen",
 	"shell.board": "Board",
+	"shell.allProjects": "Alle Projekte",
 	"shell.closeInspector": "Inspektor-Panel schließen",
 	"shell.cloudProjectBadge": "Cloud",
 	"shell.collapseSidebar": "Seitenleiste einklappen",

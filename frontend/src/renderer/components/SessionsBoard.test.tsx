@@ -174,6 +174,10 @@ function renderBoard(projectId?: string) {
 	return queryClient;
 }
 
+function renderBoardResult(projectId?: string) {
+	return renderBoardWithClient(new QueryClient({ defaultOptions: { queries: { retry: false } } }), projectId);
+}
+
 /** The board with the shell's archive modal host beside it, as the app mounts them. */
 function renderBoardWithClient(queryClient: QueryClient, projectId?: string) {
 	return render(
@@ -607,7 +611,7 @@ describe("SessionsBoard", () => {
 		expect(indicator).toBeNull();
 	});
 
-	it("shows the Board crumb on the root board when actions live in the panel", () => {
+	it("titles the root board All projects and leaves out project actions", () => {
 		workspaceQueryMock.mockReturnValue({
 			data: [
 				{
@@ -623,7 +627,42 @@ describe("SessionsBoard", () => {
 
 		renderBoard();
 
-		expect(screen.getByText("Board")).toBeInTheDocument();
+		expect(screen.getByTestId("board-topbar-label")).toHaveTextContent("All projects");
+		expect(screen.queryByRole("button", { name: /^Orchestrator/ })).toBeNull();
+	});
+
+	it("names each card's project on the all-projects board only", () => {
+		const session = (id: string, workspaceId: string, title: string) => ({
+			id,
+			workspaceId,
+			title,
+			provider: "claude-code",
+			branch: `ao/${id}`,
+			status: "idle",
+			activity: { state: "idle", lastActivityAt: "2026-01-01T00:00:00Z" },
+			updatedAt: "2026-01-01T00:00:00Z",
+			prs: [],
+		});
+		workspaceQueryMock.mockReturnValue({
+			data: [
+				{ id: "p1", name: "radic", path: "/tmp/radic", sessions: [session("s1", "p1", "first-task")] },
+				{ id: "p2", name: "solkit-ui", path: "/tmp/solkit-ui", sessions: [session("s2", "p2", "second-task")] },
+			],
+			isError: false,
+			isSuccess: true,
+		});
+
+		const { unmount } = renderBoardResult();
+
+		const first = screen.getByText("first-task").closest('[data-testid="board-session-card"]') as HTMLElement;
+		const second = screen.getByText("second-task").closest('[data-testid="board-session-card"]') as HTMLElement;
+		expect(within(first).getByTestId("board-card-project")).toHaveTextContent("radic");
+		expect(within(second).getByTestId("board-card-project")).toHaveTextContent("solkit-ui");
+		unmount();
+
+		renderBoard("p1");
+		expect(screen.getByText("first-task")).toBeInTheDocument();
+		expect(screen.queryByTestId("board-card-project")).toBeNull();
 	});
 
 	it("labels an idle session as Idle, not Working", () => {

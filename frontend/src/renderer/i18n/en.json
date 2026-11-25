@@ -2524,6 +2524,7 @@
 	"archiveModal.empty": "No archived sessions",
 	"archiveModal.restore": "Restore",
 	"shell.board": "Board",
+	"shell.allProjects": "All projects",
 	"shell.closeInspector": "Close inspector panel",
 	"shell.cloudProjectBadge": "Cloud",
 	"shell.collapseSidebar": "Collapse sidebar",

@@ -2604,6 +2604,7 @@
 	"archiveModal.empty": "Нет архивных сессий",
 	"archiveModal.restore": "Восстановить",
 	"shell.board": "Доска",
+	"shell.allProjects": "Все проекты",
 	"shell.closeInspector": "Закрыть панель инспектора",
 	"shell.cloudProjectBadge": "Облако",
 	"shell.collapseSidebar": "Свернуть боковую панель",

@@ -2144,6 +2144,7 @@
 	"archiveModal.empty": "アーカイブ済みセッションはありません",
 	"archiveModal.restore": "復元",
 	"shell.board": "ボード",
+	"shell.allProjects": "すべてのプロジェクト",
 	"shell.closeInspector": "インスペクターパネルを閉じる",
 	"shell.cloudProjectBadge": "クラウド",
 	"shell.collapseSidebar": "サイドバーを折りたたむ",
