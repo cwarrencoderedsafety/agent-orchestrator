@@ -5306,5 +5306,17 @@
 	"shell.deleteCloudProjectTitle": "Projeyi sil",
 	"shell.deleteCloudProjectLead": "Bu işlem {{name}} projesini kalıcı olarak silecek",
 	"shell.deleteCloudProjectConfirm": "Kalıcı olarak sil",
-	"shell.cloudProjectDeleted": "{{name}} silindi"
+	"shell.cloudProjectDeleted": "{{name}} silindi",
+	"newHostProject.button": "New AO-Atlas project",
+	"newHostProject.title": "New project on AO-Atlas",
+	"newHostProject.description": "Type a name. Orchestrator makes the folder, adds the project, and gives it your standard setup. Its orchestrator starts within about a minute.",
+	"newHostProject.host": "Host",
+	"newHostProject.name": "Project name",
+	"newHostProject.placeholder": "my-project",
+	"newHostProject.willCreate": "Creates {{path}} on {{host}}",
+	"newHostProject.noHost": "Connect to your AO-Atlas host first.",
+	"newHostProject.badName": "Use letters, numbers, dot, dash and underscore (max 64), starting with a letter or number.",
+	"newHostProject.create": "Create project",
+	"newHostProject.creating": "Creating…",
+	"newHostProject.failed": "Could not create the project on this host."
 }

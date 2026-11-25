@@ -2,7 +2,7 @@ import { useTelemetrySurface } from "../lib/ui-usage-telemetry";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useConnectedHosts } from "../hooks/useHostConnection";
-import { useRemoteHostWorkspacesQuery, useWorkspaceQuery } from "../hooks/useWorkspaceQuery";
+import { useRemoteHostWorkspacesQuery, useRemoteWorkspaces, useWorkspaceQuery } from "../hooks/useWorkspaceQuery";
 import { LOCAL_HOST, refKey } from "../lib/hosts";
 import { sessionNavigateTarget } from "../lib/navigate-to-session";
 import { recordManualWorkerOpen } from "../lib/session-management-telemetry";
@@ -38,7 +38,14 @@ function ArchiveModal({ open, request }: { open: boolean; request: ArchiveModalR
 	// (5 s, 15 s) running beside the shell's for the rest of the app's life.
 	const local = useWorkspaceQuery({ enabled: open && !hostId, subscribed: open && !hostId });
 	const remote = useRemoteHostWorkspacesQuery(hostId ?? "", { enabled: open && Boolean(hostId), subscribed: open && Boolean(hostId) });
-	const workspaces = hostId ? remote.data : local.data;
+	// The all-projects board's archive also lists every connected remote host's
+	// archived sessions, not only this machine's.
+	const allProjects = !hostId && !projectId;
+	const remoteAll = useRemoteWorkspaces({ subscribed: open && allProjects });
+	const workspaces = useMemo(
+		() => hostId ? remote.data : allProjects ? [...(local.data ?? []), ...remoteAll.data] : local.data,
+		[allProjects, hostId, local.data, remote.data, remoteAll.data],
+	);
 
 	const liveSessions = useMemo(() => {
 		const scoped = projectId ? (workspaces ?? []).filter((workspace) => workspace.id === projectId) : workspaces ?? [];
@@ -52,9 +59,10 @@ function ArchiveModal({ open, request }: { open: boolean; request: ArchiveModalR
 
 	const markArchivePick = useTelemetrySurface("archive_modal", open, { choice: true });
 	const openSession = useCallback((session: WorkspaceSession) => {
-		if (session.kind === "worker") recordManualWorkerOpen(session.id, hostId);
+		const sessionHost = session.hostId ?? hostId;
+		if (session.kind === "worker") recordManualWorkerOpen(session.id, sessionHost);
 		markArchivePick();
-		void navigate(sessionNavigateTarget(session.workspaceId, session.id, hostId));
+		void navigate(sessionNavigateTarget(session.workspaceId, session.id, sessionHost));
 	}, [hostId, markArchivePick, navigate]);
 
 	const onOpenChange = useCallback((next: boolean) => {

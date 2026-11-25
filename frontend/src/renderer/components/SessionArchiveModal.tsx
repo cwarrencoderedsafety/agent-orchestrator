@@ -284,11 +284,13 @@ export function SessionArchiveModal({
 			return next;
 		});
 		try {
-			const result = await restoreSessionById(session.id, hostId);
+			// On the all-projects archive a session may belong to a remote host.
+			const sessionHost = session.hostId ?? hostId;
+			const result = await restoreSessionById(session.id, sessionHost);
 			if (!stillHere()) return;
 			if (result.status === "success") {
 				onOpenChange(false);
-				void navigate(sessionNavigateTarget(session.workspaceId, session.id, hostId));
+				void navigate(sessionNavigateTarget(session.workspaceId, session.id, sessionHost));
 				return;
 			}
 			if (result.status === "not_resumable") {
@@ -552,12 +554,12 @@ export function SessionArchiveModal({
 				<RestoreUnavailableDialog
 					open={true}
 					session={restoreUnavailableSession}
-					hostId={hostId}
+					hostId={restoreUnavailableSession.hostId ?? hostId}
 					onOpenChange={(next) => {
 						if (!next) setRestoreUnavailableSession(undefined);
 					}}
 					onRecreated={async () => {
-						await queryClient.invalidateQueries({ queryKey: workspaceQueryKeyForHost(hostId) });
+						await queryClient.invalidateQueries({ queryKey: workspaceQueryKeyForHost(restoreUnavailableSession.hostId ?? hostId) });
 					}}
 				/>
 			) : null}

@@ -26,6 +26,7 @@ import {
 	GitPullRequest,
 	LoaderCircle,
 	LayoutGrid,
+	FolderPlus,
 	Package,
 	Gauge,
 	LogIn,
@@ -168,6 +169,7 @@ import type { RemoteHost } from "../hooks/useRemoteHosts";
 import { sessionNavigateTarget } from "../lib/navigate-to-session";
 import { sessionUiKey } from "../lib/hosts";
 import { RemoteHostsSection } from "./RemoteHostsSection";
+import { NewHostProjectDialog } from "./NewHostProjectDialog";
 
 // macOS paints framed chrome: the fixed TitlebarNav cluster carries the
 // sidebar toggle + history arrows above this surface. Windows hangs the sidebar
@@ -737,6 +739,7 @@ export const Sidebar = memo(function Sidebar({
 	resizeAuxiliaryTargetRef,
 }: SidebarProps) {
 	const { t } = useTranslation();
+	const [newHostProjectOpen, setNewHostProjectOpen] = useState(false);
 	const remoteNavigate = useNavigate();
 	const selection = useSelection();
 	const { state, setOpen, toggleSidebar } = useSidebar();
@@ -1191,6 +1194,18 @@ export const Sidebar = memo(function Sidebar({
 							tooltip={isCollapsed ? t("shell.allProjects") : undefined}
 						/>
 					</SidebarMenuItem>
+					{remoteHosts.length > 0 ? (
+						<SidebarMenuItem>
+							<SidebarTopNavRow
+								active={newHostProjectOpen}
+								icon={<FolderPlus aria-hidden="true" />}
+								label={t("newHostProject.button")}
+								onClick={() => setNewHostProjectOpen(true)}
+								tooltip={isCollapsed ? t("newHostProject.button") : undefined}
+							/>
+							<NewHostProjectDialog open={newHostProjectOpen} onOpenChange={setNewHostProjectOpen} hosts={remoteHosts} />
+						</SidebarMenuItem>
+					) : null}
 					<SidebarMenuItem>
 						<SidebarTopNavRow
 							active={selection.isAutomations}
